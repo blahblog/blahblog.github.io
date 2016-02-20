@@ -1,0 +1,120 @@
+#!/bin/bash
+
+ROOT=$(cd $(dirname $0) && pwd -P)
+
+MAKEFILE=$ROOT/makefile-generated
+BUILDSCRIPT=$ROOT/build-generated
+
+INDEX=$ROOT/index.html
+RAW=$ROOT/raw
+POSTS=$ROOT/posts
+
+function init_index {
+cat << EOF > $INDEX
+  <html>
+    <head>
+      <title>On Management</title> <!-- TODO: seo stuffs -->
+    </head>
+    <body>
+      <h1>On Management</h1>
+EOF
+}
+
+function gen_index_link {
+cat << EOF >> $INDEX
+      <a href="$1">$2 by $3</a>
+EOF
+}
+
+function term_index {
+cat << EOF >> $INDEX
+    </body>
+  </html>
+EOF
+}
+
+function init_makefile { 
+cat << EOF > $MAKEFILE
+.PHONY: default init clean buildall
+default: init buildall
+
+init: posts
+
+posts:
+	mkdir -p posts
+
+clean: 
+	rm -rf posts
+
+EOF
+}
+
+function gen_makefile_target {
+cat << EOF >> $MAKEFILE
+# TODO: bash script which takes the params passed in and generates the post
+$1: $2 build
+	bash $BUILDSCRIPT "$2" "$1" "$3" "$4"
+
+EOF
+}
+
+function term_makefile {
+cat << EOF >> $MAKEFILE
+buildall: $1
+EOF
+}
+
+function gen_buildfile {
+cat << EOF > $BUILDSCRIPT
+  echo -n "<html><head>" > \$2
+  echo -n "<title>\$3</title>" >> \$2
+  echo -n "</head><body>" >> \$2
+  echo -n "<h2>\$3</h2>" >> \$2
+  echo -n "by \$4" >> \$2
+  echo -n "<p>" >> \$2
+  cat \$1 | sed 's/^\([A-Z][^a-z]*\)\$/<\/p><h3>\1<\/h3><p>/g' | sed 's/^[[:space:]]*\$/<\/p><p>/g' | tr '\\n' ' ' >> \$2
+  echo -n "</p>" >> \$2
+  echo -n "</body></html>" >> \$2
+  sed -i '' 's%<p>[[:space:]]*</p>%%g' \$2
+EOF
+}
+
+function build {
+  init_index
+  init_makefile
+  gen_buildfile
+
+  TARGETS=""
+  for SOURCE in $(cd $RAW && find . -type f | sort); do
+    SOURCE=$(echo $SOURCE | sed 's%\./%%')
+    read -r DATE TITLE AUTHOR < <(echo $SOURCE | tr '.' ' ')
+
+    DESTFILE="posts/$DATE-${TITLE}.html"
+    TARGETS="$TARGETS $DESTFILE"
+    TITLECASED=$(echo $TITLE | tr '-' ' ' | python -c "import sys; print(sys.stdin.readline().title())")
+
+    gen_index_link "$DESTFILE" "$TITLECASED" "$AUTHOR"
+    gen_makefile_target "$DESTFILE" "raw/$SOURCE" "$TITLECASED" "$AUTHOR"
+  done
+
+  term_index
+  term_makefile "$TARGETS"
+
+  make -f $MAKEFILE
+}
+
+function clean {
+  [ -f $MAKEFILE ] && {
+    make -f $MAKEFILE clean
+    rm $MAKEFILE
+  }
+
+  [ -f $BUILDSCRIPT ] && rm $BUILDSCRIPT
+  [ -f $INDEX ] && rm $INDEX
+}
+
+if [[ "$1" == "clean" ]]; then
+  clean
+else
+  build
+fi

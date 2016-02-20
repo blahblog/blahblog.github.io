@@ -1,0 +1,10 @@
+#!/bin/bash
+
+ROOT=$(cd $(dirname $0) && pwd -P)
+
+[ $# -eq 1 ] || {
+  echo 'usage: $PROG <slugged-post-name>' >&2
+  exit 187
+}
+
+touch $ROOT/raw/$(date '+%Y%m%d')."$1".$(whoami | awk -F "\\" '{print $NF}' | sed 's/\./-/g')
