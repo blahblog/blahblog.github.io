@@ -9,26 +9,32 @@ INDEX=$ROOT/index.html
 RAW=$ROOT/raw
 POSTS=$ROOT/posts
 
+MONTHS=(invalid January February March April May June July August September October November December)
+STYLES='<link rel="stylesheet" type="text/css" href="/styles.css" />'
+
 function init_index {
 cat << EOF > $INDEX
   <html>
     <head>
       <title>On Management</title> <!-- TODO: seo stuffs -->
+      $STYLES
     </head>
-    <body>
+    <body><div>
       <h1>On Management</h1>
+      <ol reversed>
 EOF
 }
 
 function gen_index_link {
 cat << EOF >> $INDEX
-      <a href="$1">$2 by $3</a>
+        <li><a href="$1">$2 by $3 - $4</a></li>
 EOF
 }
 
 function term_index {
 cat << EOF >> $INDEX
-    </body>
+      </ol>
+    </div></body>
   </html>
 EOF
 }
@@ -53,7 +59,7 @@ function gen_makefile_target {
 cat << EOF >> $MAKEFILE
 # TODO: bash script which takes the params passed in and generates the post
 $1: $2 build
-	bash $BUILDSCRIPT "$2" "$1" "$3" "$4"
+	bash $BUILDSCRIPT "$2" "$1" "$3" "$4" "$5"
 
 EOF
 }
@@ -68,15 +74,28 @@ function gen_buildfile {
 cat << EOF > $BUILDSCRIPT
   echo -n "<html><head>" > \$2
   echo -n "<title>\$3</title>" >> \$2
-  echo -n "</head><body>" >> \$2
+  echo -n "$STYLES" >> \$2
+  echo -n "</head><body><div>" >> \$2
   echo -n "<h2>\$3</h2>" >> \$2
-  echo -n "by \$4" >> \$2
+  echo -n "<h6>by \$4 - \$5</h6>" >> \$2
   echo -n "<p>" >> \$2
-  cat \$1 | sed 's/^\([A-Z][^a-z]*\)\$/<\/p><h3>\1<\/h3><p>/g' | sed 's/^[[:space:]]*\$/<\/p><p>/g' | tr '\\n' ' ' >> \$2
+  cat \$1 \\
+    | sed \\
+      -e 's/^\([A-Z][^a-z]*\)\$/<\/p><h3>\1<\/h3><p>/g' \\
+      -e 's/^[[:space:]]*\$/<\/p><p>/g' \\
+      -e 's/^\[\(.*\)\]\$/<blockquote>\1<\/blockquote>/g' \\
+      -e 's/ _\(..*\)_\([^a-zA-Z0-9]\)/ <em>\1<\/em>\2/g' \\
+    | python -c "import re, sys; print re.sub(r'((\n-.*)+)', lambda x: '<ul><li>%s</li></ul>' % x.groups()[0][2:].replace('\n-', '</li><li>'), sys.stdin.read(), flags=re.MULTILINE)" \\
+    | tr '\\n' ' ' \\
+    | python -c "import re, string, sys; print(re.sub('<h3>([A-Z][^a-z]*)</h3>', lambda x: '<h3>%s</h3>' % string.capwords(x.groups()[0]).strip(), sys.stdin.readline()))" >> \$2
   echo -n "</p>" >> \$2
-  echo -n "</body></html>" >> \$2
-  sed -i '' 's%<p>[[:space:]]*</p>%%g' \$2
+  echo -n "<br/><span class='no-print'>[<a href='/'>posts</a>] [<a href='/\$1'>just the words</a>]</span></div></body></html>" >> \$2
+  sed -i '' -e 's%<p>[[:space:]]*</p>%%g' \$2
 EOF
+
+# | python -c "import sys; print(sys.stdin.read().replace('\n', '<br/>'))" \\
+# | sed -e 's%<br/>\(<br/>\)*</p>%</p>%g' -e 's%<p><br/>\(<br/>\)*%<p>%g'
+
 }
 
 function build {
@@ -85,22 +104,38 @@ function build {
   gen_buildfile
 
   TARGETS=""
-  for SOURCE in $(cd $RAW && find . -type f | sort); do
+  for SOURCE in $(cd $RAW && find . -type f | sort -r); do
     SOURCE=$(echo $SOURCE | sed 's%\./%%')
     read -r DATE TITLE AUTHOR < <(echo $SOURCE | tr '.' ' ')
 
     DESTFILE="posts/$DATE-${TITLE}.html"
     TARGETS="$TARGETS $DESTFILE"
-    TITLECASED=$(echo $TITLE | tr '-' ' ' | python -c "import sys; print(sys.stdin.readline().title())")
 
-    gen_index_link "$DESTFILE" "$TITLECASED" "$AUTHOR"
-    gen_makefile_target "$DESTFILE" "raw/$SOURCE" "$TITLECASED" "$AUTHOR"
+    TITLECASED=$(titlecase $TITLE)
+    AUTHORCASED=$(titlecase $AUTHOR)
+    DISPLAYDATE="$(atoi ${DATE:(-2)}) $(month ${DATE:4:2}) ${DATE:0:4}"
+
+    gen_index_link "$DESTFILE" "$TITLECASED" "$AUTHORCASED" "$DISPLAYDATE"
+    gen_makefile_target "$DESTFILE" "raw/$SOURCE" "$TITLECASED" "$AUTHORCASED" "$DISPLAYDATE"
   done
 
   term_index
   term_makefile "$TARGETS"
 
   make -f $MAKEFILE
+}
+
+function titlecase {
+  echo $1 | tr '-' ' ' | python -c "import string, sys; print(string.capwords(sys.stdin.readline()))"
+}
+
+function month {
+  INDEX=$(atoi $1)
+  echo ${MONTHS[$INDEX]}
+}
+
+function atoi {
+  echo $1 | sed 's/^0//'
 }
 
 function clean {
