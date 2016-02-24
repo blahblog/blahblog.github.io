@@ -10,6 +10,8 @@ RAW=$ROOT/raw
 POSTS=$ROOT/posts
 
 MONTHS=(invalid January February March April May June July August September October November December)
+
+META='<meta name="viewport" content="width=device-width, initial-scale=1.0">'
 STYLES='<link rel="stylesheet" type="text/css" href="/styles.css" />'
 
 function init_index {
@@ -17,6 +19,7 @@ cat << EOF > $INDEX
   <html>
     <head>
       <title>On Management</title> <!-- TODO: seo stuffs -->
+      $META
       $STYLES
     </head>
     <body><div>
@@ -73,6 +76,7 @@ function gen_buildfile {
 cat << EOF > $BUILDSCRIPT
   echo -n "<html><head>" > \$2
   echo -n "<title>\$3</title>" >> \$2
+  echo -n "$META" >> \$2
   echo -n "$STYLES" >> \$2
   echo -n "</head><body><div>" >> \$2
   echo -n "<h2>\$3</h2>" >> \$2
