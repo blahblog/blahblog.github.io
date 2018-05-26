@@ -1,0 +1,17 @@
+#!/bin/bash
+
+ROOT=$(cd $(dirname $0) && pwd -P)
+
+# NOTE: `$1' below must not be quoted, as in the case that no args are 
+#  specified to this script, we only want to send one argument to `build'
+OUTPUT=$($ROOT/build preview "$@") || exit 1
+
+echo "$OUTPUT" | sed '$ d'
+
+PREVIEWFILE="$(echo "$OUTPUT" | tail -n1)"
+
+if which open >/dev/null 2>&1; then
+  open "$PREVIEWFILE"
+else
+  echo "don't know how to open [$$PREVIEWFILE]"
+fi
